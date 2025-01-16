@@ -3,8 +3,6 @@
 import argparse
 import bluetooth
 import json
-import serial
-import serial.tools.list_ports
 import typing
 
 from bluetooth.btcommon import Protocols
@@ -146,33 +144,47 @@ def issue_command(command:dict) -> typing.Any:
     '''
     Issue a command to the signal generator.
     '''
-    y = json.dumps(command).encode('utf-8')
-
-    sock.send(y)
-    sock.send(b'\n')
-
-    # Read back the response.
+    # Local function to read a string from the socket.
     #
-    response : bytearray = bytearray("", encoding="ascii")
-    try:
-        sock.settimeout(.5)
-        while True:
-            data = sock.recv(1024)
-            response = response + data
-    except Exception as e:
-        pass
-    finally:
-        sock.settimeout(None)
+    def readline(timeout: float) -> bytearray:
+        response : bytearray = bytearray("", encoding="ascii")
+        try:
+            sock.settimeout(timeout)
+            while True:
+                data = sock.recv(1024)
+                response = response + data
+        except Exception as e:
+            pass
+        finally:
+            sock.settimeout(None)
+        return response
 
+    # Local function to read the response from the socket.
+    #
     # There will be three parts to the response.  They are
     # the original command, the response, and the prompt
     # for the next line.  They are separated by a '\n' so
     # you can split the string to retrieve the command
     # response as the second entry in the split array.
     #
-    response_string = str(bytes(response))
-    split_response  = response_string.split("\\n")
-    return json.loads(split_response[1])
+    def get_response() -> str:
+        response = readline(.5)
+        response_string = str(bytes(response))
+        split_response = response_string.split("\\n")
+        return split_response[1]
+    
+    # Main part of the method.
+    #
+    # Send the command
+    #
+    y = json.dumps(command).encode('utf-8')
+    sock.send(y)
+    sock.send(b'\n')
+
+    # Get the response and return it as a json structure.
+    #
+    response = get_response()
+    return json.loads(response)
 
 
 # Main method.
