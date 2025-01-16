@@ -14,6 +14,7 @@
                },
     },
     "files.associations": {
-      "optional": "cpp"
+      "optional": "cpp",
+      "ostream": "cpp"
     },
 }

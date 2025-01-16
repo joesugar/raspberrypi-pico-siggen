@@ -84,3 +84,9 @@ The signal generator defaults to a frequency of 1 kHz with the output
 disabled on startup, and uses the default serial port of 
 `/dev/ttyACM0`.  If your port is different you'll have to change 
 it in the script.
+
+## License
+
+With the exception of the siggen_bt python script, this project uses
+the MIT License.  The siggen_bt python script uses the pybluez2 module
+and, as such, is licensed under the GPL V2.

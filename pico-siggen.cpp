@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <iostream>
+#include <sstream>
 
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
@@ -9,14 +10,28 @@
 #include "AD9850.hpp"
 #include "command_processor.hpp"
 
+// Control pins for the AD99850 DDS module.
+//
 const uint OSC_HZ = AD9850::OSC_HZ;
 const uint W_CLK  = 10;
 const uint FQ_UD  = 11;
 const uint DATA   = 12;
 const uint RESET  = 13;
 
-const uint UART_TX = 0;
-const uint UART_RX = 1;
+// These are the TX and RX pins for UART1
+//
+std::optional<uart_inst_t*> uart = std::make_optional(uart1);
+const uint UART_TX = 4;
+const uint UART_RX = 5;
+const uint BAUD    = 9600;
+
+// Constnts to define the CR LF values.
+//
+#ifndef CRLF
+    #define CRLF
+    const char LF = 0x0A;
+    const char CR = 0x0D;
+#endif
 
 /**
  * @brief  Alarm callback.
@@ -33,11 +48,22 @@ int64_t alarm_callback(alarm_id_t id, void *user_data)
  */
 void show_error(command_t command)
 {
-    std::cout << 
+    std::ostringstream os;
+    os << 
         R"({)" << 
-        R"(  "command_number":)" << command.command_number << "," 
-        R"(  "error":)"          << R"(")"  << command.error.value() << R"(")" <<
-        R"(})" << std::endl;
+        R"("command_number":)" << command.command_number << "," 
+        R"("error":)"          << R"(")"  << command.error.value() << R"(")" <<
+        R"(})";
+
+    if (uart.has_value())
+    {
+        uart_puts(uart.value(), os.str().c_str());
+        uart_putc(uart.value(), LF);
+    }
+    else
+    {
+        std::cout << os.str() << std::endl;
+    }
 }
 
 /**
@@ -48,13 +74,24 @@ void show_error(command_t command)
  */
 void ack_command(int command_number, AD9850 dds)
 {
-    std::cout << 
+    std::ostringstream os;
+    os << 
         R"({)" << 
-        R"(  "command_number":)" <<  command_number << "," 
-        R"(  "frequency":)"      <<  dds.get_frequency() << ","
-        R"(  "phase":)"          <<  dds.get_phase() << ","
-        R"(  "enable_out":)"     << (dds.get_enabled() ? "true" : "false") <<
-        R"(})" << std::endl;
+        R"("command_number":)" <<  command_number << "," 
+        R"("frequency":)"      <<  dds.get_frequency() << ","
+        R"("phase":)"          <<  dds.get_phase() << ","
+        R"("enable_out":)"     << (dds.get_enabled() ? "true" : "false") <<
+        R"(})";
+
+    if (uart.has_value())
+    {
+        uart_puts(uart.value(), os.str().c_str());
+        uart_putc(uart.value(), LF);
+    }
+    else
+    {
+        std::cout << os.str() << std::endl;
+    }
 }
 
 /**
@@ -76,9 +113,12 @@ int main()
     // The UART has to be enabled in the make file for this
     // to work.
     //
-    gpio_set_function(UART_TX, UART_FUNCSEL_NUM(uart0, UART_TX));
-    gpio_set_function(UART_RX, UART_FUNCSEL_NUM(uart0, UART_RX));
-    uart_init(uart0, 115200);
+    if (uart.has_value())
+    {
+        gpio_set_function(UART_TX, UART_FUNCSEL_NUM(uart, UART_TX));
+        gpio_set_function(UART_RX, UART_FUNCSEL_NUM(uart, UART_RX));
+        uart_init(uart.value(), BAUD);
+    }
 
     // Create an instance of the DDS.
     //
@@ -89,7 +129,7 @@ int main()
     // Create an instance of the command processor
     // to monitor stdio for incoming commands.
     //
-    CommandProcessor command_processor;
+    CommandProcessor command_processor(uart);
 
     // Enter the processing loop.
     //

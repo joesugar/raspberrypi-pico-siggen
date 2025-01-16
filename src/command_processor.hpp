@@ -21,18 +21,28 @@ namespace
         std::optional<std::string> error = std::nullopt;
     };
 
+    // Constnts to define the CR LF values.
+    //
+    #ifndef CRLF
+        #define CRLF
+        const char LF = 0x0A;
+        const char CR = 0x0D;
+    #endif
+
     // Now the command receiver class.
     //
     class CommandProcessor
     {
     public:
+
         /**
-         * @brief  Class constructor
+         * @brief  Class constructor with uart
          */
-        CommandProcessor() :
+        CommandProcessor(std::optional<uart_inst_t*> uart) :
             command_buffer_index_(0),
             show_prompt_(false),
-            crlf_(false)
+            crlf_(false),
+            uart_(uart)
         {
             // Zero out the command buffer.
             //
@@ -86,14 +96,23 @@ namespace
             // Get the character from stdio.  If it's a timeout 
             // you can just leave the method.
             //
-            int character = stdio_getchar_timeout_us(0);
+            int character = 0x00;
+            if (uart_.has_value())
+            {
+                character = uart_is_readable(uart_.value()) ?
+                    static_cast<int>(uart_getc(uart_.value())) : PICO_ERROR_TIMEOUT;
+            }
+            else
+            {
+                character = stdio_getchar_timeout_us(0);
+            }
             if (character == PICO_ERROR_TIMEOUT)
                 return;
 
             // If you get a LF right after a CR ignore it.  We
             // map CR to LF below and don't want two in a row.
             //
-            if ((character == '\n') && (crlf_))
+            if ((character == LF) && (crlf_))
             {
                 crlf_ = false;
                 return;
@@ -102,8 +121,8 @@ namespace
             // We're mapping CR and LF to 0x00 since they are 
             // considered to be line terminators.
             //
-            crlf_ = (character == '\r');
-            if ((character == '\r') || (character == '\n'))
+            crlf_ = (character == CR);
+            if ((character == CR) || (character == LF))
             {
                 character = 0x00;
             }
@@ -152,8 +171,22 @@ namespace
          */
         auto reflect(int character) -> void
         {
-            std::cout << ((character == 0x00) ? '\n' : static_cast<char>(character));
-            std::cout << std::flush;
+            if (uart_.has_value())
+            {
+                if (character == 0x00)
+                {
+                    uart_putc(uart_.value(), LF);
+                }
+                else
+                {
+                    uart_putc(uart_.value(), static_cast<char>(character));
+                }
+            }
+            else
+            {
+                std::cout << ((character == 0x00) ? LF : static_cast<char>(character));
+                std::cout << std::flush;
+            }
         }
 
         /**
@@ -172,7 +205,14 @@ namespace
          */
         auto display_prompt() -> void
         {
-            std::cout << "$ " << std::flush;
+            if (uart_.has_value())
+            {
+                uart_puts(uart_.value(), "$ ");
+            }
+            else
+            {
+                std::cout << "$ " << std::flush;
+            }
         }
 
         /**
@@ -272,7 +312,6 @@ namespace
             return command_struct;
         }
 
-
         // FIFO for storing received commands.
         //
         std::vector<command_t> commands_ {  };
@@ -286,5 +325,9 @@ namespace
         //
         bool show_prompt_;
         bool crlf_;
+
+        // UART for eading incoming characters.
+        //
+        std::optional<uart_inst_t*> uart_ = std::nullopt;
     };
 }
