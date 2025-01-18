@@ -9,10 +9,7 @@ from bluetooth.btcommon import Protocols
 
 def scan() -> None:
     '''
-    Scan for bluetooth device
-
-    If bt_name == None scan for all devices
-    Otherwise, scan for specified device name
+    Scan for bluetooth devices
     '''
     try:
         print("Scanning for blueetooth devices...")
@@ -201,9 +198,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog="siggen")
     parser.add_argument('bt_addr', type=str, help='Bluetooth device address')
     subparsers = parser.add_subparsers(dest="command_name")
-
-    parser_scan = subparsers.add_parser('scan')
-    parser_scan.set_defaults(func = scan)
 
     parser_set_frequency = subparsers.add_parser('set_frequency')
     parser_set_frequency.add_argument('frequency', type=int, help='Set sig gen frequency')
